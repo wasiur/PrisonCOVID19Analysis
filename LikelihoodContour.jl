@@ -1,3 +1,5 @@
+# using Pkg
+# Pkg.activate(".")
 using DifferentialEquations
 using CSV
 using DiffEqSensitivity
@@ -10,9 +12,11 @@ using LaTeXStrings
 using Colors
 using Tables
 using DataFrames
+using Query
 using Dates
 
 plotlyjs()
+# gr()
 
 include("src/MyColours.jl")
 
@@ -31,7 +35,7 @@ end
 
 function seir_binom_likelihood(nDays, nPrisoners,  nCount, α, β, γ, ρ)
     p = [α, β, γ]
-    u0 = [1.0, ρ, 0.0, 0.0]
+    u0 = [1.0, 0.0, ρ, 0.0]
 
     if nDays < 21
         tspan = (0.0, nDays)
@@ -92,11 +96,11 @@ contour_data = seir_contour_data(MCI_nPrisoners, MCI_testing_day_counts)
 truncate_at(x; cutoff = 1500) = x <= - cutoff ? - cutoff : x
 date_subtract(x; from_date = MCI_testing_day) = from_date - Dates.Day(x)
 
-contour_data[!, :RevisedLogLikelihood] = truncate_at.(contour_data.Loglikelihood) 
+contour_data[!, :RevisedLogLikelihood] = truncate_at.(contour_data.Loglikelihood)
 contour_data[!, :OnsetDate] = date_subtract.(contour_data.nDays; from_date = MCI_testing_day)
 
-finer_contour_data = seir_contour_data(MCI_nPrisoners, MCI_testing_day_counts; dt=0.01)
-finer_contour_data[!, :RevisedLogLikelihood] = truncate_at.(finer_contour_data.Loglikelihood) 
+finer_contour_data = seir_contour_data(MCI_nPrisoners, MCI_testing_day_counts; dt=0.001)
+finer_contour_data[!, :RevisedLogLikelihood] = truncate_at.(finer_contour_data.Loglikelihood)
 
 days = 10:1:125
 onset_dates = date_subtract.(days; from_date = MCI_testing_day)
@@ -108,20 +112,22 @@ for d in days
     filtered_df = filter(:nDays => x -> x == d, finer_contour_data)
     best_likelihood = maximum(filtered_df.Loglikelihood)
     push!(max_likelihood, best_likelihood)
-    r0_mle_df = filter(:Loglikelihood => x -> x >= best_likelihood - 0.1 && x <= best_likelihood + 0.1 , filtered_df)
+    r0_mle_df = filter(:Loglikelihood => x -> x >= best_likelihood - 0.0001 && x <= best_likelihood + 0.0001 , filtered_df)
+    # r0_mle_df = filter(:Loglikelihood => x -> x >= best_likelihood, filtered_df)
     push!(r0_mle, minimum(r0_mle_df.R0))
-end 
+end
 
 pl1 = contourf(contour_data.OnsetDate, contour_data.R0, contour_data.RevisedLogLikelihood, nlevels = 50, fill=true, w=3)
 xlabel!("Onset date")
 # ylabel!(L"R_0")
+# ylabel!(L"$R_0$")
 ylabel!("R0")
 fname = "MCI_LikelihoodContours"
 savefig(pl1, "plots/" * fname * ".pdf")
 savefig(pl1, "plots/" * fname * ".svg")
 savefig(pl1, "plots/" * fname * ".png")
 
-pl2 = plot(onset_dates, r0_mle, label="Most likely R0", color=cyans[3], linewidth=4, grid=true)
+pl2 = plot(onset_dates, r0_mle, label="Most likely R0", color=blues[5], linewidth=7.5, grid=true)
 xlabel!("Onset date")
 # ylabel!(L"\mathcal{R}_0")
 # ylabel!("Most likely R_0")
@@ -131,20 +137,9 @@ savefig(pl2, "plots/" * fname * ".svg")
 savefig(pl2, "plots/" * fname * ".png")
 
 l = @layout [a{0.45w} b{0.45w}]
-pl = plot(pl1, pl2, layout = l, size=(1500, 500))
-
+pl = plot(pl1, pl2, layout = l, size=(1000, 300))
+# plot!(size=(1000,300))
 fname = "MCI_LikelihoodContoursR0Combined"
 savefig(pl, "plots/" * fname * ".pdf")
 savefig(pl, "plots/" * fname * ".svg")
 savefig(pl, "plots/" * fname * ".png")
-
-
-
-
-
-
-
-
-
-
-
